@@ -62,6 +62,12 @@ Generate schedule endpoint:
 POST https://watchtower-vxw6.onrender.com/api/schedule/generate
 ```
 
+Temporary test profile endpoint:
+
+```text
+GET https://watchtower-vxw6.onrender.com/api/schedule/test-profile
+```
+
 The deployed service currently runs on Render's free tier, so the first request
 after inactivity may be slow while the service wakes up.
 
@@ -76,6 +82,12 @@ The primary endpoint is:
 
 ```text
 POST /api/schedule/generate
+```
+
+The temporary UI integration endpoint is:
+
+```text
+GET /api/schedule/test-profile
 ```
 
 See `docs/api-schedule-generate-request.md` and

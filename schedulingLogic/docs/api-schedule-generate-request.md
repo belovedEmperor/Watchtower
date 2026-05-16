@@ -65,3 +65,16 @@ Meeting windows use minutes after midnight:
 - `parser_payload` and `ui_payload` are passed to `build_student_profile(parser_payload, ui_payload)`.
 - Course details are not required inside request course IDs; candidate section loading resolves full course/section data from the database.
 - The API response contains `score`, `credits`, and UI-renderable `sections`.
+
+## Temporary UI test endpoint
+
+Until parser payloads are ready, the UI can call:
+
+```text
+GET /api/schedule/test-profile
+```
+
+This endpoint runs the same scheduler flow using the committed test profile in
+`schedulingLogic/fixtures/test_profiles.py`. It returns the same response shape
+as `POST /api/schedule/generate`, so the UI can build rendering and error-state
+handling before the parser integration is complete.

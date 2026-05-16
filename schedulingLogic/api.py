@@ -14,6 +14,10 @@ from pysat.formula import WCNF
 
 from candidate_builder import get_candidate_sections
 from constraints_new import constraints_new, during_blocked_time, prereq_met
+from fixtures.test_profiles import (
+    LANGUAGE_SYMBOLIC_PARSER_PAYLOAD,
+    LANGUAGE_SYMBOLIC_UI_PAYLOAD,
+)
 from input_builder import build_student_profile
 from run_rc2 import decode_schedule, schedule_to_ui_sections
 from wcnf import write_wcnf
@@ -171,8 +175,36 @@ def _build_optimization_payload(
 
 @app.post("/api/schedule/generate")
 def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
+    return _generate_schedule(
+        parser_payload=req.parser_payload,
+        ui_payload=req.ui_payload,
+        term_season=req.term_season,
+        term_year=req.term_year,
+    )
+
+
+@app.get("/api/schedule/test-profile")
+def generate_test_profile_schedule(
+    term_season: str = "FALL",
+    term_year: int = 2026,
+) -> dict[str, Any]:
+    return _generate_schedule(
+        parser_payload=LANGUAGE_SYMBOLIC_PARSER_PAYLOAD,
+        ui_payload=LANGUAGE_SYMBOLIC_UI_PAYLOAD,
+        term_season=term_season,
+        term_year=term_year,
+    )
+
+
+def _generate_schedule(
+    *,
+    parser_payload: dict[str, Any],
+    ui_payload: dict[str, Any],
+    term_season: str,
+    term_year: int,
+) -> dict[str, Any]:
     try:
-        student = build_student_profile(req.parser_payload, req.ui_payload)
+        student = build_student_profile(parser_payload, ui_payload)
     except (KeyError, TypeError, ValueError):
         logger.exception("Invalid schedule generation payload")
         return _build_error_payload(
@@ -195,8 +227,8 @@ def generate_schedule(req: GenerateScheduleRequest) -> dict[str, Any]:
             sections = get_candidate_sections(
                 conn=conn,
                 student_profile=student,
-                term_season=req.term_season,
-                term_year=req.term_year,
+                term_season=term_season,
+                term_year=term_year,
                 requested_courses=requested_courses,
             )
     except psycopg.Error:
