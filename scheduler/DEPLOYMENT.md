@@ -1,6 +1,6 @@
 # Scheduler Deployment
 
-This document covers the Python scheduler service under `schedulingLogic`.
+This document covers the Python scheduler service under `scheduler`.
 Run commands from this directory unless noted otherwise because the modules use
 package-local imports such as `candidate_builder` and `constraints_new`.
 
@@ -14,7 +14,7 @@ package-local imports such as `candidate_builder` and `constraints_new`.
 ## Environment Setup
 
 ```bash
-cd schedulingLogic
+cd scheduler
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -109,7 +109,7 @@ python tools/run_test_profile_scheduler.py --show-ui-sections
 ## Run the API
 
 ```bash
-cd schedulingLogic
+cd scheduler
 source .venv/bin/activate
 export DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/postgres?sslmode=require'
 uvicorn api:app --host 0.0.0.0 --port 8000

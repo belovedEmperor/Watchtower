@@ -17,12 +17,12 @@ def _debug_print(*args) -> None:
 
 
 DAY_MAP = {
-    "monday": models.Day.MONDAY,
-    "tuesday": models.Day.TUESDAY,
-    "wednesday": models.Day.WEDNESDAY,
-    "thursday": models.Day.THURSDAY,
-    "friday": models.Day.FRIDAY,
-    "saturday": models.Day.SATURDAY,
+    "Monday": models.Day.MONDAY,
+    "Tuesday": models.Day.TUESDAY,
+    "Wednesday": models.Day.WEDNESDAY,
+    "Thursday": models.Day.THURSDAY,
+    "Friday": models.Day.FRIDAY,
+    "Saturday": models.Day.SATURDAY,
     "sunday": models.Day.SUNDAY,
     # Backward-compatible short names (older schema/seed variants).
     "mon": models.Day.MONDAY,
@@ -33,7 +33,6 @@ DAY_MAP = {
     "sat": models.Day.SATURDAY,
     "sun": models.Day.SUNDAY,
 }
-
 
 MODALITY_MAP = {
     "in_person": models.Modality.INPERSON,

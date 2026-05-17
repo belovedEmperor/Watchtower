@@ -5,9 +5,9 @@ Session.vim
 .DS_Store
 .env
 
-watchtower/src/main/resources/private/
-watchtower/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
-watchtower/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
+**/src/main/resources/private/
+**/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
+**/src/test/java/edu/hunter/watchtower/PDFParser/AuditParserTests.java
 
 # Environment variables
 **/.env

@@ -17,7 +17,7 @@ It runs:
 
 ## Run Locally
 
-From `schedulingLogic/`:
+From `scheduler/`:
 
 ```bash
 source ../.venv/bin/activate

@@ -2,7 +2,7 @@
 
 ## Current status
 - Scheduler side has a DB candidate loader implemented in:
-  - `/Users/micahbobicah/Downloads/school/spring 2026/capstone/schedulingLogic/candidate_builder.py`
+  - `/Users/micahbobicah/Downloads/school/spring 2026/capstone/scheduler/candidate_builder.py`
 - Candidate flow implemented:
   - needed exact courses + needed tags + requested courses -> target course IDs -> term-filtered sections + meetings.
 - Conversions implemented:
@@ -53,7 +53,7 @@
 - Academic career defaults to undergrad for now.
 
 ## Suggested immediate implementation tasks (ordered)
-1. Add `run_integration.py` in `schedulingLogic` to test DB -> candidates -> print results.
+1. Add `run_integration.py` in `scheduler` to test DB -> candidates -> print results.
 2. Wire solver call in same script to test end-to-end on real DB data.
 3. Add readable decoder output (course/section/day-time/modality/instructor).
 4. Remove temporary assumptions after DB teammate confirms schema/values.

@@ -8,8 +8,8 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-MODELS_PATH = REPO_ROOT / "models.py"
-OUTPUT_PATH = REPO_ROOT / "docs" / "architecture" / "models-class-diagram.md"
+MODELS_PATH = REPO_ROOT / "scheduler" / "models.py"
+OUTPUT_PATH = REPO_ROOT / "scheduler" / "docs" / "models-class-diagram.md"
 
 IGNORE_TOKENS = {
     "int",

@@ -7,7 +7,7 @@ UI-ready section data.
 ## Structure
 
 ```text
-schedulingLogic/
+scheduler/
   api.py                         FastAPI endpoint for schedule generation
   models.py                      Scheduler domain model
   input_builder.py               Parser/UI payload to StudentProfile adapter
@@ -31,13 +31,13 @@ From the repository root:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r schedulingLogic/requirements.txt
+python -m pip install -r scheduler/requirements.txt
 ```
 
 Copy the environment template when running locally:
 
 ```bash
-cp schedulingLogic/.env.example schedulingLogic/.env
+cp scheduler/.env.example scheduler/.env
 ```
 
 Do not commit `.env` files or real database credentials.
@@ -46,7 +46,7 @@ Do not commit `.env` files or real database credentials.
 
 ```bash
 export DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/postgres?sslmode=require'
-uvicorn api:app --app-dir schedulingLogic --host 0.0.0.0 --port 8000
+uvicorn api:app --app-dir scheduler --host 0.0.0.0 --port 8000
 ```
 
 The primary endpoint is:
@@ -64,7 +64,7 @@ The deployment smoke test uses the reusable test profile in `fixtures/` and can
 run with either `DATABASE_URL` or `DB_PASSWORD` set:
 
 ```bash
-.venv/bin/python schedulingLogic/tools/run_test_profile_scheduler.py --season FALL --year 2026
+.venv/bin/python scheduler/tools/run_test_profile_scheduler.py --season FALL --year 2026
 ```
 
 A passing run prints `status: PASS`, a SAT solver result, and the selected
