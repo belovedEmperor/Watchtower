@@ -39,6 +39,8 @@ class PDFController {
             result = auditParser.parse(f);
         } catch (IOException e) {
             result.put("ERROR", e.getMessage());
+        } catch (RuntimeException e) {
+            result.put("ERROR", "Parser failed: " + e.getMessage());
         } finally {
             f.deleteOnExit();
         }
@@ -48,4 +50,3 @@ class PDFController {
     
     
 }
-

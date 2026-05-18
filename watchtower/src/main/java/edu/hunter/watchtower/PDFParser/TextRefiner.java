@@ -106,8 +106,6 @@ public class TextRefiner {
         String[] lines = text.split("\n");
 
         for (int i = 0; i < lines.length; ++i) {
-            Matcher m1 = Pattern.compile(start).matcher(lines[i]);
-            if (m1.find()) System.out.println(m1);
             if (!found) {
                 Matcher matcher = Pattern.compile(start).matcher(lines[i]);
                 if (matcher.find()) {
@@ -122,7 +120,6 @@ public class TextRefiner {
                     found = false;
                     if (builder.length() > 0) {
                         builder.append(lines[i].substring(0,matcher.start()));
-                        System.out.println(builder.toString());
                         result.add(builder.toString().trim());
                     }
                     builder.setLength(0);

@@ -113,13 +113,17 @@ function parseCourseId(courseCode: string): CourseIdPayload | null {
   return { subject_area: match[1], catalog_number: parseInt(match[2], 10) };
 }
 
+function coursePayloadToId(course: any): CourseIdPayload | null {
+  const code = `${course?.departmentCode ?? ""} ${(course?.courseID ?? "").replace("@", "")}`.trim();
+  return parseCourseId(code);
+}
+
 function collectCompleted(block: any): CourseIdPayload[] {
   const results: CourseIdPayload[] = [];
   for (const req of (block?.Completed ?? [])) {
     for (const course of (req.courses ?? [])) {
       if (course.grade) {
-        const code = `${course.departmentCode ?? ""} ${(course.courseID ?? "").replace("@", "")}`.trim();
-        const id = parseCourseId(code);
+        const id = coursePayloadToId(course);
         if (id) results.push(id);
       }
     }
@@ -134,8 +138,7 @@ function collectRequirements(block: any, attribute: string): RequirementPayload[
     credits_needed: req.credits ?? 0,
     fulfilled_by: (req.courses ?? [])
       .map((c: any) => {
-        const code = `${c.departmentCode ?? ""} ${(c.courseID ?? "").replace("@", "")}`.trim();
-        return parseCourseId(code);
+        return coursePayloadToId(c);
       })
       .filter(Boolean) as CourseIdPayload[],
   }));
@@ -144,6 +147,32 @@ function collectRequirements(block: any, attribute: string): RequirementPayload[
 export function buildParserPayload(data: any): ParserPayload {
   const takenMap = new Map<string, CourseIdPayload>();
   const addCourse = (id: CourseIdPayload) => takenMap.set(`${id.subject_area}-${id.catalog_number}`, id);
+
+  if (Array.isArray(data.Completed) || Array.isArray(data["Still Needed"])) {
+    for (const req of (data.Completed ?? [])) {
+      for (const course of (req.courses ?? [])) {
+        if (course.grade) {
+          const id = coursePayloadToId(course);
+          if (id) addCourse(id);
+        }
+      }
+    }
+
+    return {
+      majors: (data.Major ?? []).map(normalizeMajorName),
+      classes_taken: Array.from(takenMap.values()),
+      requirements_needed: (data["Still Needed"] ?? []).map((req: any) => ({
+        name: req.name ?? "",
+        attribute: req.tag ?? "",
+        credits_needed: req.credits ?? 0,
+        fulfilled_by: (req.courses ?? [])
+          .map(coursePayloadToId)
+          .filter(Boolean) as CourseIdPayload[],
+      })),
+      major_elective_credits: 0,
+      general_elective_credits: 0,
+    };
+  }
 
   for (const section of ["CUNY Core", "Hunter Focus", "Writing Requirement"]) {
     collectCompleted(data[section]).forEach(addCourse);
