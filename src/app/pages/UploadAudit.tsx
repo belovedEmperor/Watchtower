@@ -93,8 +93,23 @@ export function UploadAudit() {
     setFile(selectedFile);
   };
 
-  const requirementLabel = (req: ParserRequirement) =>
-    req.name === "Elective" ? (req.courses?.[0]?.name ?? "Elective") : (req.name || req.tag || "Requirement");
+  const cleanMajorName = (name: string) => name.replace(/^MHC-/, "").trim();
+  const cleanDisplayName = (name: string) => name.replace(/\bMHC-/g, "").trim();
+
+  const firstCourseLabel = (req: ParserRequirement) => {
+    const course = req.courses?.[0];
+    if (!course) return null;
+    const code = `${course.departmentCode ?? ""} ${course.courseID ?? ""}`.trim();
+    const title = course.name ?? "";
+    return [code, title].filter(Boolean).join(" - ");
+  };
+
+  const requirementLabel = (req: ParserRequirement) => {
+    const name = req.name || "";
+    const genericNames = new Set(["Elective", "Elective Courses Allowed", "Pluralism & Diversity"]);
+    if (genericNames.has(name)) return firstCourseLabel(req) ?? name;
+    return cleanDisplayName(name || req.tag || "Requirement");
+  };
 
   const hasTag = (req: ParserRequirement, ...needles: string[]) => {
     const tag = (req.tag ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -105,19 +120,29 @@ export function UploadAudit() {
     });
   };
 
-  const linesFor = (data: ParserResponse, predicate: (req: ParserRequirement) => boolean) => [
-    ...(data.Completed ?? [])
+  const uniqueLines = (lines: string[]) => Array.from(new Set(lines));
+
+  const linesFor = (
+    data: ParserResponse,
+    predicate: (req: ParserRequirement) => boolean,
+    options: { includeCompleted?: boolean; includeNeeded?: boolean } = {}
+  ) => {
+    const includeCompleted = options.includeCompleted ?? true;
+    const includeNeeded = options.includeNeeded ?? true;
+    return uniqueLines([
+      ...(includeCompleted ? (data.Completed ?? [])
       .filter(predicate)
-      .map((req) => `${requirementLabel(req)} — Completed`),
-    ...(data["Still Needed"] ?? [])
+      .map((req) => `${requirementLabel(req)} — Completed`) : []),
+      ...(includeNeeded ? (data["Still Needed"] ?? [])
       .filter(predicate)
-      .map((req) => `${requirementLabel(req)} — Still Needed`),
-  ];
+      .map((req) => `${requirementLabel(req)} — Still Needed`) : []),
+    ]);
+  };
 
   const mapToRequirements = (data: ParserResponse): ParsedRequirements => {
     const dc = data["Degree Credits"];
     const majorCreditLines = Object.entries(data.MajorInfo ?? {}).map(([key, credits]) => {
-      const majorName = key.replace(/^Major_?Credits_?/, "");
+      const majorName = cleanMajorName(key.replace(/^Major_?Credits_?/, ""));
       return `${majorName}: ${credits["Credits applied"]} / ${credits["Credits required"]} credits — ${credits.Status}`;
     });
 
@@ -130,9 +155,16 @@ export function UploadAudit() {
       pluralism: linesFor(data, (req) => hasTag(req, "PluralismDiversity", "Pluralism & Diversity")),
       hunterFocus: linesFor(data, (req) => hasTag(req, "Hunter Focus")),
       writing: linesFor(data, (req) => hasTag(req, "Writing Requirement")),
-      major: linesFor(data, (req) => hasTag(req, "major_") && !hasTag(req, "major_elective", "Additional Requ")),
+      major: uniqueLines([
+        ...(data.Completed ?? [])
+          .filter((req) => hasTag(req, "major_") && !hasTag(req, "major_elective", "Additional Requ"))
+          .map((req) => `${requirementLabel(req)} — Completed`),
+        ...(data["Still Needed"] ?? [])
+          .filter((req) => hasTag(req, "major_") && !hasTag(req, "Additional Requ"))
+          .map((req) => `${requirementLabel(req)} — Still Needed`),
+      ]),
       additionalMajor: linesFor(data, (req) => hasTag(req, "Additional Requ")),
-      electives: linesFor(data, (req) => hasTag(req, "major_elective", "Elective Courses Allowed")),
+      electives: linesFor(data, (req) => hasTag(req, "major_elective", "Elective Courses Allowed"), { includeNeeded: false }),
     };
   };
 
@@ -161,7 +193,9 @@ export function UploadAudit() {
         try {
           const data: ParserResponse = JSON.parse(xhr.responseText);
           if (data.ERROR) {
-            throw new Error(String(data.ERROR));
+            setUploadError(`The parser could not read this audit: ${String(data.ERROR)}`);
+            setUploadStatus("idle");
+            return;
           }
           setCheckedItems(new Set());
           setParserResponse(data);
@@ -362,7 +396,7 @@ export function UploadAudit() {
                               if (!credits) return null;
                               return (
                                 <div key={majorName} className="flex justify-between text-sm">
-                                  <span className="text-gray-600">{majorName} Major</span>
+	                                  <span className="text-gray-600">{cleanMajorName(majorName)} Major</span>
                                   <span className="font-semibold">{credits["Credits applied"]} / {credits["Credits required"]}</span>
                                 </div>
                               );
@@ -441,24 +475,32 @@ export function UploadAudit() {
 
             <div className="overflow-y-auto px-6 py-6 space-y-6 flex-1">
               {[
-                { label: "Degree Requirements", items: parsedRequirements?.degree ?? [], color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
-                { label: "Common Core", items: parsedRequirements?.commonCore ?? [], color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200" },
+                { label: "Degree Requirements", items: parsedRequirements?.degree ?? [], color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", summaryOnly: true },
+                { label: "Common Core", items: parsedRequirements?.commonCore ?? [], color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200", summaryOnly: false },
                 { label: "Pluralism & Diversity", items: parsedRequirements?.pluralism ?? [], color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200" },
                 { label: "Hunter Focus", items: parsedRequirements?.hunterFocus ?? [], color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
                 { label: "Writing Requirement", items: parsedRequirements?.writing ?? [], color: "text-green-600", bg: "bg-green-50", border: "border-green-200" },
                 { label: "Major", items: parsedRequirements?.major ?? [], color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200" },
                 { label: "Additional Major Requirements", items: parsedRequirements?.additionalMajor ?? [], color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200" },
                 { label: "Electives Accepted", items: parsedRequirements?.electives ?? [], color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200" },
-              ].filter(({ items }) => items.length > 0).map(({ label, items, color, bg, border }) => (
+              ].filter(({ items }) => items.length > 0).map(({ label, items, color, bg, border, summaryOnly }) => (
                 <div key={label}>
                   <h3 className={`text-xs font-semibold uppercase tracking-wide mb-3 ${color}`}>{label}</h3>
                   <ul className={`rounded-xl border ${border} ${bg} divide-y divide-white/60`}>
                     {items.map((item: string, idx: number) => {
                       const itemKey = `${label}::${idx}`;
+                      const displayText = item.replace(/ — (Completed|Still Needed)$/, "");
+                      if (summaryOnly) {
+                        return (
+                          <li key={itemKey} className="flex items-start gap-3 px-4 py-3">
+                            <span className={`size-2 rounded-full shrink-0 mt-2 ${color.replace("text-", "bg-")}`} />
+                            <span className="text-sm font-medium text-gray-800">{displayText}</span>
+                          </li>
+                        );
+                      }
                       const originallyDone = item.endsWith("— Completed");
                       const isToggled = checkedItems.has(itemKey);
                       const isDone = originallyDone ? !isToggled : isToggled;
-                      const displayText = item.replace(/ — (Completed|Still Needed)$/, "");
                       return (
                         <li
                           key={itemKey}

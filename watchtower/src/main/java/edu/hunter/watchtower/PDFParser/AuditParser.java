@@ -50,6 +50,11 @@ public class AuditParser {
     private final String additionalReq = "Additional \\b\\w+\\b Requ(\\-|:)";
 
     private final String flexibleCommonCoreBlock = "FLEXIBLE COMMON CORE For Individual and Society";
+    private final Pattern courseLinePattern = Pattern.compile(
+        "^\\s*(.*?)([A-Z]{2,7})\\s+(\\d{2,6}(?:LA)?)\\s+(.+?)\\s+"
+            + "(?:(?:((?:A|B|C|D|F|P|W|NC|INC)[\\+\\-]?)\\s+(\\d(?:\\.\\d)?)\\s+"
+            + "(?:FALL|SUMMER|WINTER|SPRING)(?:\\s+\\d{4}U)?)|(?:IP\\s+\\((\\d(?:\\.\\d)?)))"
+    );
 
     public Map<String,Object> parse(File file) {
         String text;
@@ -432,24 +437,24 @@ public class AuditParser {
         ArrayList<Requirement> taken = new ArrayList<>();
         if (text == null || text.isBlank()) return taken;
 
-        Matcher m = (reqName.equals("") ? Pattern.compile("\\n.+(\\s"+courseStart+"(.+)"+courseEndings+")").matcher(text)
-            : Pattern.compile("\\n("+courseStart+"(.+)"+courseEndings+")").matcher(text));
-        while(m.find()) {
+        for (String line : text.split("\\n")) {
+            Matcher m = courseLinePattern.matcher(line);
+            if (!m.find()) continue;
+
             Requirement req = new Requirement();
-            req.name =(reqName.equals("")) ? m.group().trim().split(courseStart)[0].trim() : reqName;
+            req.name = reqName.equals("") ? m.group(1).trim() : reqName;
             req.tag = tag;
 
             Course c = new Course();
-            c.name = m.group(3).trim();
-            String[] split = m.group(1).trim().split(" ");
-            c.courseID = split[1].trim();
-            c.departmentCode = split[0].trim();
-            if (m.group().contains("IP (")) {
+            c.departmentCode = m.group(2).trim();
+            c.courseID = m.group(3).trim();
+            c.name = m.group(4).trim();
+            if (m.group(7) != null) {
                 c.grade = "IP";
-                c.credit = Float.parseFloat(m.group(9).replaceAll(".*\\(","").trim());
+                c.credit = Float.parseFloat(m.group(7));
             } else {
-                c.grade = m.group(4).trim();
-                c.credit = Float.parseFloat(m.group(7).trim());
+                c.grade = m.group(5).trim();
+                c.credit = Float.parseFloat(m.group(6));
             }
             req.courses = new ArrayList<>(Arrays.asList(c));
             taken.add(req);

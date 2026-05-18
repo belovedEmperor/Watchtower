@@ -13,8 +13,9 @@ const REQUIREMENT_GROUPS: Array<{
   color: string;
   bg: string;
   border: string;
+  summaryOnly?: boolean;
 }> = [
-  { key: "degree", label: "Degree Requirements", color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
+  { key: "degree", label: "Degree Requirements", color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", summaryOnly: true },
   { key: "commonCore", label: "Common Core", color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200" },
   { key: "pluralism", label: "Pluralism & Diversity", color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200" },
   { key: "hunterFocus", label: "Hunter Focus", color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
@@ -205,7 +206,7 @@ export function ViewRequirements() {
                 {REQUIREMENT_GROUPS
                   .map((group) => ({ ...group, items: summary[group.key] ?? [] }))
                   .filter(({ items }) => items.length > 0)
-                  .map(({ label, items, color, bg, border }) => (
+                  .map(({ label, items, color, bg, border, summaryOnly }) => (
                     <section key={label}>
                       <div className="flex items-center justify-between mb-2">
                         <h3 className={`text-xs font-semibold uppercase tracking-wide ${color}`}>{label}</h3>
@@ -216,6 +217,16 @@ export function ViewRequirements() {
                       <ul className={`rounded-xl border ${border} ${bg} divide-y divide-white/60`}>
                         {items.map((item, idx) => {
                           const { label: itemLabel, completed } = parseRequirementStatus(item);
+                          if (summaryOnly) {
+                            return (
+                              <li key={`${label}-${idx}`} className="flex items-start gap-3 px-4 py-3">
+                                <span className={`size-2 rounded-full shrink-0 mt-2 ${color.replace("text-", "bg-")}`} />
+                                <span className="text-sm font-medium text-gray-800">
+                                  {itemLabel}
+                                </span>
+                              </li>
+                            );
+                          }
                           return (
                             <li key={`${label}-${idx}`} className="flex items-start gap-3 px-4 py-3">
                               {completed
