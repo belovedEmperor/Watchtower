@@ -10,6 +10,8 @@ const PROGRAM_KEY_MAP = {
   "Computer Science": "ComputerScience_ComputerScience",
   MATH: "Mathematics_Mathematics",
   Mathematics: "Mathematics_Mathematics",
+  POLSC: "PoliticalScience_None",
+  "Political Science": "PoliticalScience_None",
 };
 
 // GET /api/courses/search?q=
