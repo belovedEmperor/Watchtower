@@ -1,3 +1,4 @@
+// Author: Alba Muriqi
 require("dotenv").config();
 
 const express = require("express");
@@ -10,12 +11,29 @@ const coursesRouter = require("./routes/courses");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const isProduction = process.env.NODE_ENV === "production";
+
+if (isProduction) {
+  app.set("trust proxy", 1);
+}
+
+const allowedOrigins = (process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (!isProduction) return /^http:\/\/localhost:\d+$/.test(origin);
+  return allowedOrigins.includes(origin.replace(/\/$/, ""));
+}
 
 app.use(
   cors({
-    origin: process.env.NODE_ENV === "development"
-      ? /^http:\/\/localhost:\d+$/
-      : process.env.CORS_ORIGIN,
+    origin(origin, callback) {
+      if (isAllowedOrigin(origin)) return callback(null, true);
+      return callback(new Error(`CORS origin not allowed: ${origin}`));
+    },
     credentials: true,
   })
 );
@@ -38,8 +56,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
   })

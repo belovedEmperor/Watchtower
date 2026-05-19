@@ -7,7 +7,7 @@ from typing import Optional
 class Major(str, Enum):
     CS = "COMPUTER SCIENCE"
     MATH = "MATHEMATICS"
-    POLISCI= "POLITICAL SCIENCE"
+    POLSC = "POLITICAL SCIENCE"
 
 
 class AcademicCareer(str, Enum):
@@ -171,4 +171,3 @@ class Schedule:
     @property
     def credits(self) -> int:
         return sum(section.course.credits for section in self.classes)
-
