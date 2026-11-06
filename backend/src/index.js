@@ -8,6 +8,7 @@ const cors = require("cors");
 const pool = require("./db");
 const usersRouter = require("./routes/users");
 const coursesRouter = require("./routes/courses");
+const catalogRouter = require("./routes/catalog");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -25,7 +26,9 @@ const allowedOrigins = (process.env.CORS_ORIGIN || "")
 function isAllowedOrigin(origin) {
   if (!origin) return true;
   if (!isProduction) return /^http:\/\/localhost:\d+$/.test(origin);
-  return allowedOrigins.includes(origin.replace(/\/$/, ""));
+  const normalized = origin.replace(/\/$/, "");
+  const isCloudFront = /^https:\/\/[a-z0-9]+\.cloudfront\.net$/.test(normalized);
+  return allowedOrigins.includes(normalized) || isCloudFront;
 }
 
 app.use(
@@ -65,9 +68,11 @@ app.use(
 
 app.use("/api/users", usersRouter);
 app.use("/api/courses", coursesRouter);
+app.use("/api/catalog", catalogRouter);
 
 // Health check
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
