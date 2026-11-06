@@ -14,6 +14,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  parser-tests:
+    name: DegreeWorks parser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Run parser tests
+        working-directory: parser
+        run: ./mvnw --batch-mode --no-transfer-progress test
+
   scheduler-tests:
     name: Scheduler validity checks
     runs-on: ubuntu-latest
