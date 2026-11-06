@@ -187,6 +187,7 @@ jobs:
   scrape:
     needs: [schedule_gate, build]
     if: >-
+      always() &&
       github.event_name != 'pull_request' &&
       github.repository == 'godelsdreamhouse/hunterstudentscheduler' &&
       github.ref == 'refs/heads/main' &&
