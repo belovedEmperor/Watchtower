@@ -8,6 +8,7 @@ const cors = require("cors");
 const pool = require("./db");
 const usersRouter = require("./routes/users");
 const coursesRouter = require("./routes/courses");
+const catalogRouter = require("./routes/catalog");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -67,6 +68,7 @@ app.use(
 
 app.use("/api/users", usersRouter);
 app.use("/api/courses", coursesRouter);
+app.use("/api/catalog", catalogRouter);
 
 // Health check
 app.get("/health", (_req, res) => res.json({ status: "ok" }));

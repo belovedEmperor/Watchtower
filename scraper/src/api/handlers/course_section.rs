@@ -149,12 +149,48 @@ async fn insert_section(
         .section
         .get("callNumber")
         .and_then(serde_json::Value::as_i64)
+        .and_then(|call_number| i32::try_from(call_number).ok())
         .unwrap_or_default();
+
+    // Hunter can reassign a class number after a section has already been scraped.
+    // Serialize writes for the canonical class/term identity, then remove the stale
+    // owner before upserting by the logical course/section identity below.
+    let class_term_key = format!(
+        "{}:{}:{}",
+        class_num, parameters.term_season_str, parameters.term_year
+    );
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(class_term_key)
+        .execute(&mut *connection)
+        .await
+        .map_err(database_error)?;
+    sqlx::query!(
+        r#"
+        DELETE FROM sections
+        WHERE class_num = $1
+          AND term_season = $2
+          AND term_year = $3
+          AND (
+            course_id <> $4
+            OR section_number <> $5
+            OR section_component <> 'lecture'::component
+            OR group_code IS NOT NULL
+          )
+        "#,
+        class_num,
+        parameters.term_season_str,
+        parameters.term_year,
+        parameters.course_group_id,
+        parameters.section_number
+    )
+    .execute(&mut *connection)
+    .await
+    .map_err(database_error)?;
 
     let row = sqlx::query!(
         "
         INSERT INTO sections (class_num,course_id,term_season,term_year,section_number,instructor,instruction_mode,max_enrollment,enrollment)
-        VALUES ($9::bigint,$1,$2,$3,$4,$5,$6::text::modality,$7,$8)
+        VALUES ($9::int,$1,$2,$3,$4,$5,$6::text::modality,$7,$8)
         ON CONFLICT (course_id, term_season, term_year, section_number, section_component) WHERE group_code IS NULL
         DO UPDATE SET
         max_enrollment = EXCLUDED.max_enrollment,
@@ -322,5 +358,63 @@ mod tests {
             .await
             .expect("preserved meetings");
         assert_eq!(meetings, vec![("HN 2".to_owned(),)]);
+    }
+
+    #[sqlx::test(migrations = false)]
+    async fn reassigned_class_number_replaces_stale_owner(pool: sqlx::PgPool) {
+        sqlx::raw_sql(include_str!("../../../../database/schema.sql"))
+            .execute(&pool)
+            .await
+            .expect("test schema");
+        sqlx::raw_sql(
+            "INSERT INTO departments VALUES ('TEST', 'Test');
+             INSERT INTO courses (course_id, course_code, course_name, dep_code) VALUES
+               ('current-course', 'TEST 101', 'Current', 'TEST'),
+               ('stale-course', 'TEST 102', 'Stale', 'TEST');
+             INSERT INTO sections (class_num, course_id, term_season, term_year, section_number)
+             VALUES
+               (12345, 'stale-course', 'FALL', 2026, '99'),
+               (99999, 'current-course', 'FALL', 2026, '01');",
+        )
+        .execute(&pool)
+        .await
+        .expect("stale sections");
+        let state = AppState {
+            pool: pool.clone(),
+            client: reqwest::Client::new(),
+            outbound_limiter: new_outbound_limiter(&OutboundLimiterSettings {
+                per_second: 1,
+                burst_size: 1,
+            }),
+        };
+        let query = axum::extract::Query(Section {
+            course_group_id: "current-course".into(),
+            term_id: "1269".into(),
+        });
+        let data = serde_json::json!({
+            "sections": [{
+                "sectionNumber": "01",
+                "callNumber": 12345,
+                "maxEnrollment": 30,
+                "enrollment": 10,
+                "instructionMode": "In Person",
+                "times": []
+            }]
+        });
+
+        insert_to_db(state, query, &axum::Json(data))
+            .await
+            .expect("reassigned class number");
+
+        let sections: Vec<(i32, String, String)> = sqlx::query_as(
+            "SELECT class_num, course_id, section_number FROM sections ORDER BY section_id",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("sections");
+        assert_eq!(
+            sections,
+            vec![(12345, "current-course".to_owned(), "01".to_owned())]
+        );
     }
 }
