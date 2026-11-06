@@ -62,6 +62,18 @@ async fn insert_to_db(
                 section_number,
             };
 
+            // Coursedog returns cancelled sections alongside active offerings.
+            // Remove a previously scraped copy instead of presenting it as a
+            // schedulable section.
+            if scraped_section
+                .get("status")
+                .and_then(serde_json::Value::as_str)
+                == Some("Cancelled Section")
+            {
+                delete_cancelled_section(&common_parameters, &state.pool).await?;
+                continue;
+            }
+
             // Replace meetings atomically so retries and weekly runs do not duplicate them.
             let mut transaction = state.pool.begin().await.map_err(database_error)?;
             let section_id =
@@ -77,6 +89,32 @@ async fn insert_to_db(
             transaction.commit().await.map_err(database_error)?;
         }
     }
+
+    Ok(())
+}
+
+async fn delete_cancelled_section(
+    parameters: &Parameters<'_>,
+    pool: &sqlx::PgPool,
+) -> Result<(), axum::http::StatusCode> {
+    sqlx::query(
+        r#"
+        DELETE FROM sections
+        WHERE term_season = $1
+          AND term_year = $2
+          AND course_id = $3
+          AND section_number = $4
+          AND section_component = 'lecture'::component
+          AND group_code IS NULL
+        "#,
+    )
+    .bind(parameters.term_season_str)
+    .bind(parameters.term_year)
+    .bind(parameters.course_group_id)
+    .bind(parameters.section_number)
+    .execute(pool)
+    .await
+    .map_err(database_error)?;
 
     Ok(())
 }
@@ -116,34 +154,23 @@ async fn insert_section(
         .and_then(serde_json::Value::as_i64)
         .map(|enrolled| i32::try_from(enrolled).ok())
         .unwrap_or_default();
+    let waitlist_max_enrollment: Option<i32> = parameters
+        .section
+        .get("maxWaitlist")
+        .and_then(serde_json::Value::as_i64)
+        .and_then(|capacity| i32::try_from(capacity).ok());
+    let waitlist_count: Option<i32> = parameters
+        .section
+        .get("waitlist")
+        .and_then(serde_json::Value::as_i64)
+        .and_then(|count| i32::try_from(count).ok());
     let instruction_mode = match instruction_mode {
         "In Person" => "in_person",
         "Hybrid" => "hybrid",
         "Online Asynchronous" => "asynchronous",
         _ => "remote",
     };
-    let professor_ids = parameters
-        .section
-        .get("professors")
-        .and_then(|professors| professors.as_array());
-    let instructor_id = professor_ids
-        .and_then(|professors_array| professors_array.iter().next())
-        .and_then(|instructor_id| instructor_id.as_str());
-    let professor =
-        professors.and_then(|professors| professors.get(instructor_id.unwrap_or_default()));
-    let professor_first_name = professor
-        .and_then(|professor| professor.get("firstName"))
-        .and_then(|first_name| first_name.as_str())
-        .unwrap_or("NULL");
-    let professor_last_name = professor
-        .and_then(|professor| professor.get("lastName"))
-        .and_then(|last_name| last_name.as_str())
-        .unwrap_or("NULL");
-    let instructor = if professor_first_name != "NULL" && professor_last_name != "NULL" {
-        format!("{professor_last_name},{professor_first_name}")
-    } else {
-        "NULL".to_string()
-    };
+    let instructor = instructor_names(parameters.section, professors);
 
     let class_num = parameters
         .section
@@ -189,15 +216,17 @@ async fn insert_section(
 
     let row = sqlx::query!(
         "
-        INSERT INTO sections (class_num,course_id,term_season,term_year,section_number,instructor,instruction_mode,max_enrollment,enrollment)
-        VALUES ($9::int,$1,$2,$3,$4,$5,$6::text::modality,$7,$8)
+        INSERT INTO sections (class_num,course_id,term_season,term_year,section_number,instructor,instruction_mode,max_enrollment,enrollment,waitlist_max_enrollment,waitlist_count)
+        VALUES ($11::int,$1,$2,$3,$4,$5,$6::text::modality,$7,$8,$9,$10)
         ON CONFLICT (course_id, term_season, term_year, section_number, section_component) WHERE group_code IS NULL
         DO UPDATE SET
         max_enrollment = EXCLUDED.max_enrollment,
         enrollment = EXCLUDED.enrollment,
         class_num = EXCLUDED.class_num,
         instructor = EXCLUDED.instructor,
-        instruction_mode = EXCLUDED.instruction_mode
+        instruction_mode = EXCLUDED.instruction_mode,
+        waitlist_max_enrollment = EXCLUDED.waitlist_max_enrollment,
+        waitlist_count = EXCLUDED.waitlist_count
         RETURNING section_id
         ",
         parameters
@@ -208,10 +237,12 @@ async fn insert_section(
         .term_year,
         parameters
         .section_number,
-        instructor,
+        instructor.as_deref(),
         instruction_mode,
         max_enrollment,
         enrollment,
+        waitlist_max_enrollment,
+        waitlist_count,
         class_num
     )
     .fetch_one(&mut *connection)
@@ -222,6 +253,28 @@ async fn insert_section(
     })?;
 
     Ok(row.section_id)
+}
+
+fn instructor_names(
+    section: &serde_json::Value,
+    professors: Option<&serde_json::Value>,
+) -> Option<String> {
+    let names = section
+        .get("professors")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .filter_map(|instructor_id| professors?.get(instructor_id))
+        .filter_map(|professor| {
+            let first_name = professor.get("firstName")?.as_str()?.trim();
+            let last_name = professor.get("lastName")?.as_str()?.trim();
+            (!first_name.is_empty() && !last_name.is_empty())
+                .then(|| format!("{last_name},{first_name}"))
+        })
+        .collect::<Vec<_>>();
+
+    (!names.is_empty()).then(|| names.join("; "))
 }
 
 async fn insert_section_meeting(
@@ -235,7 +288,7 @@ async fn insert_section_meeting(
         .and_then(|times| times.as_array())
     {
         for time in section_times {
-            let day_of_week = time.get("day").and_then(|day| day.as_array()).map(|days| {
+            let Some(day_of_week) = time.get("day").and_then(|day| day.as_array()).map(|days| {
                 let mut days_of_week = vec![];
 
                 for day in days {
@@ -254,25 +307,34 @@ async fn insert_section_meeting(
                 }
 
                 days_of_week
-            });
-            let start_time = time
-                .get("start")
-                .and_then(serde_json::Value::as_i64)
-                .and_then(|start| {
-                    let hour = u8::try_from(start / 100).unwrap_or_default();
-                    let minute = u8::try_from(start % 100).unwrap_or_default();
-                    time::Time::from_hms(hour, minute, 0).ok()
-                })
-                .unwrap_or(time::Time::MIDNIGHT);
-            let end_time = time
-                .get("end")
-                .and_then(serde_json::Value::as_i64)
-                .and_then(|start| {
-                    let hour = u8::try_from(start / 100).unwrap_or_default();
-                    let minute = u8::try_from(start % 100).unwrap_or_default();
-                    time::Time::from_hms(hour, minute, 0).ok()
-                })
-                .unwrap_or(time::Time::MAX);
+            }) else {
+                continue;
+            };
+            // A TBA record has no schedulable day/time. Do not turn missing
+            // values into an invented all-day meeting.
+            if day_of_week.is_empty() {
+                continue;
+            }
+            let Some(start) = time.get("start").and_then(serde_json::Value::as_i64) else {
+                continue;
+            };
+            let Some(end) = time.get("end").and_then(serde_json::Value::as_i64) else {
+                continue;
+            };
+            let Some(start_time) = ({
+                let hour = u8::try_from(start / 100).unwrap_or_default();
+                let minute = u8::try_from(start % 100).unwrap_or_default();
+                time::Time::from_hms(hour, minute, 0).ok()
+            }) else {
+                continue;
+            };
+            let Some(end_time) = ({
+                let hour = u8::try_from(end / 100).unwrap_or_default();
+                let minute = u8::try_from(end % 100).unwrap_or_default();
+                time::Time::from_hms(hour, minute, 0).ok()
+            }) else {
+                continue;
+            };
             let location = time
                 .get("classroom")
                 .and_then(|location| location.as_str())
@@ -284,7 +346,7 @@ async fn insert_section_meeting(
                 VALUES ($1,$2::Text[]::weekday[],$3,$4,$5)
                 ",
                 section_id,
-                day_of_week.as_deref(),
+                day_of_week.as_slice(),
                 start_time,
                 end_time,
                 location
@@ -328,7 +390,27 @@ mod tests {
                 term_id: "1269".into(),
             })
         };
-        let mut data = serde_json::json!({"sections": [{"sectionNumber":"01", "callNumber":12345, "maxEnrollment":30,"enrollment":10,"instructionMode":"In Person", "times":[{"day":[1],"start":900,"end":1000,"classroom":"HN 1"}]}]});
+        let mut data = serde_json::json!({
+            "sections": [{
+                "sectionNumber":"01",
+                "callNumber":12345,
+                "maxEnrollment":30,
+                "enrollment":10,
+                "maxWaitlist":20,
+                "waitlist":3,
+                "status":"Active",
+                "instructionMode":"In Person",
+                "professors":["primary", "secondary"],
+                "times":[
+                    {"day":[1],"start":900,"end":1000,"classroom":"HN 1"},
+                    {"day":[],"start":null,"end":null,"classroom":"HTR-TBA"}
+                ]
+            }],
+            "professors": {
+                "primary": {"firstName":"Ada", "lastName":"Lovelace"},
+                "secondary": {"firstName":"Grace", "lastName":"Hopper"}
+            }
+        });
         insert_to_db(state.clone(), query(), &axum::Json(data.clone()))
             .await
             .expect("first scrape");
@@ -341,6 +423,16 @@ mod tests {
             .await
             .expect("meetings");
         assert_eq!(meetings, vec![("HN 2".to_owned(),)]);
+        let section_values: (Option<String>, i32, i32) = sqlx::query_as(
+            "SELECT instructor, waitlist_max_enrollment, waitlist_count FROM sections",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("section values");
+        assert_eq!(
+            section_values,
+            (Some("Lovelace,Ada; Hopper,Grace".to_owned()), 20, 3)
+        );
         data["sections"][0]["enrollment"] = serde_json::json!(20);
         data["sections"][0]["times"][0]["end"] = serde_json::json!(800);
         assert!(
@@ -415,6 +507,93 @@ mod tests {
         assert_eq!(
             sections,
             vec![(12345, "current-course".to_owned(), "01".to_owned())]
+        );
+    }
+
+    #[sqlx::test(migrations = false)]
+    async fn cancelled_section_removes_previously_scraped_copy(pool: sqlx::PgPool) {
+        sqlx::raw_sql(include_str!("../../../../database/schema.sql"))
+            .execute(&pool)
+            .await
+            .expect("test schema");
+        sqlx::raw_sql(
+            "INSERT INTO departments VALUES ('TEST', 'Test');
+             INSERT INTO courses (course_id, course_code, course_name, dep_code)
+             VALUES ('test-course', 'TEST 101', 'Test', 'TEST');
+             INSERT INTO sections (class_num, course_id, term_season, term_year, section_number)
+             VALUES (12345, 'test-course', 'SPRING', 2027, '01');",
+        )
+        .execute(&pool)
+        .await
+        .expect("stale section");
+        let state = AppState {
+            pool: pool.clone(),
+            client: reqwest::Client::new(),
+            outbound_limiter: new_outbound_limiter(&OutboundLimiterSettings {
+                per_second: 1,
+                burst_size: 1,
+            }),
+        };
+        let query = axum::extract::Query(Section {
+            course_group_id: "test-course".into(),
+            term_id: "1272".into(),
+        });
+        let data = serde_json::json!({
+            "sections": [{
+                "sectionNumber": "01",
+                "callNumber": 12345,
+                "status": "Cancelled Section"
+            }]
+        });
+
+        insert_to_db(state.clone(), query, &axum::Json(data.clone()))
+            .await
+            .expect("cancelled section");
+
+        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM sections")
+            .fetch_one(&pool)
+            .await
+            .expect("section count");
+        assert_eq!(count.0, 0);
+
+        // A class number can be reassigned to another section. A later
+        // cancellation record for the old section must not remove its new owner.
+        sqlx::query(
+            "INSERT INTO sections (class_num, course_id, term_season, term_year, section_number)
+             VALUES (12345, 'test-course', 'SPRING', 2027, '02')",
+        )
+        .execute(&pool)
+        .await
+        .expect("reassigned section");
+        insert_to_db(
+            state,
+            axum::extract::Query(Section {
+                course_group_id: "test-course".into(),
+                term_id: "1272".into(),
+            }),
+            &axum::Json(data),
+        )
+        .await
+        .expect("stale cancellation");
+
+        let section_numbers: Vec<(String,)> = sqlx::query_as("SELECT section_number FROM sections")
+            .fetch_all(&pool)
+            .await
+            .expect("remaining sections");
+        assert_eq!(section_numbers, vec![("02".to_owned(),)]);
+    }
+
+    #[test]
+    fn instructor_names_preserve_every_resolved_instructor() {
+        let section = serde_json::json!({"professors": ["one", "missing", "two"]});
+        let professors = serde_json::json!({
+            "one": {"firstName": "Ada", "lastName": "Lovelace"},
+            "two": {"firstName": "Grace", "lastName": "Hopper"}
+        });
+
+        assert_eq!(
+            instructor_names(&section, Some(&professors)),
+            Some("Lovelace,Ada; Hopper,Grace".to_owned())
         );
     }
 }
