@@ -30,9 +30,9 @@ NODE_ENV=development
 # Session - use a long random string in production
 SESSION_SECRET=your-secret-here
 
-# CORS - origin allowed to send credentials in production
-# In development, any localhost port is allowed automatically.
-CORS_ORIGIN=https://watchtower-red.vercel.app
+# CORS - exact origin allowed to send credentials in production. When omitted,
+# PUBLIC_APP_ORIGIN is used. In development, any localhost port is allowed.
+CORS_ORIGIN=https://your-app.example
 
 # Supabase/PostgreSQL connection used by auth, sessions, and course search
 DATABASE_URL=postgresql://user:password@host:5432/database?sslmode=require
@@ -55,7 +55,7 @@ Application tables should match the project schema in [`../database/schema.sql`]
 
 ## API Endpoints
 
-All API endpoints are prefixed with `/api`. Authenticated routes require an active session cookie named `sid`.
+All API endpoints are prefixed with `/api`. Authenticated routes require an active session cookie named `sid`. Authentication rotates the session identifier, and user responses are marked `Cache-Control: no-store`.
 
 ### Auth & Users - `/api/users`
 

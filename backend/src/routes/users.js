@@ -9,6 +9,11 @@ const { DEMO_ACCOUNT_EMAIL, DEMO_AUDIT } = require("../demoAudit");
 const router = express.Router();
 const SALT_ROUNDS = 12;
 
+router.use((_req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
+
 function normalizeEmail(email) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
 }
@@ -61,6 +66,18 @@ function saveSession(req) {
   return new Promise((resolve, reject) => {
     req.session.save((err) => (err ? reject(err) : resolve()));
   });
+}
+
+function regenerateSession(req) {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((err) => (err ? reject(err) : resolve()));
+  });
+}
+
+async function establishAuthenticatedSession(req, userId) {
+  await regenerateSession(req);
+  req.session.userId = userId;
+  await saveSession(req);
 }
 
 function statesMatch(expected, received) {
@@ -166,8 +183,7 @@ router.get("/oauth/microsoft/callback", async (req, res) => {
       );
     }
 
-    req.session.userId = user.emplid;
-    await saveSession(req);
+    await establishAuthenticatedSession(req, user.emplid);
     return res.redirect(frontendUrl("/dashboard"));
   } catch (err) {
     console.error("Microsoft sign-in failed:", err);
@@ -239,7 +255,7 @@ router.post("/register", async (req, res) => {
     );
 
     const user = result.rows[0];
-    req.session.userId = user.emplid;
+    await establishAuthenticatedSession(req, user.emplid);
     return res.status(201).json({ first_name: user.first_name, last_name: user.last_name, email: user.email });
   } catch (err) {
     console.error("signup error:", err);
@@ -291,7 +307,7 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    req.session.userId = user.emplid;
+    await establishAuthenticatedSession(req, user.emplid);
     return res.json({ first_name: user.first_name, last_name: user.last_name, email: user.email });
   } catch (err) {
     console.error("login error:", err);
