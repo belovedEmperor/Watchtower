@@ -132,7 +132,7 @@ Resources:
           SPRING_DATASOURCE_USERNAME: hunter_compute
           SPRING_DATASOURCE_PASSWORD: "{{resolve:secretsmanager:hunter-scheduler/compute:SecretString:password}}"
           SPRING_DATASOURCE_URL: !Sub jdbc:postgresql://${DatabaseHost}:5432/hunterscheduler?sslmode=verify-full&sslrootcert=/opt/rds-ca-global.pem
-          CORS_ALLOWED_ORIGINS: https://*.cloudfront.net
+          CORS_ALLOWED_ORIGINS: https://d263b17wgkx1dd.cloudfront.net
       Tags:
         - Key: Project
           Value: hunterscheduler
