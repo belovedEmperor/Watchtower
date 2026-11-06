@@ -21,18 +21,23 @@ filename. Selected manual-planner sections and smart-builder preferences still
 use `localStorage`; those records can reveal planning intent but do not contain
 the raw audit.
 
-The dormant account API stores EMPLID, name, CUNY email, a bcrypt password hash,
-and optional Microsoft identity linkage. Its PostgreSQL session contains EMPLID
-and, briefly, OAuth state/nonce. The cookie lasts seven days. Profile and demo
-audit routes require a server-side session; catalog routes remain public.
+The account API stores EMPLID, name, CUNY email, a bcrypt password hash, and
+optional Microsoft identity linkage. It is not linked from the no-login planner,
+but it is publicly reachable: CloudFront forwards `/api/*`, API Gateway exposes
+the proxy route, and Express mounts the user routes. Its PostgreSQL session
+contains EMPLID and, briefly, OAuth state/nonce. The cookie lasts seven days.
+Profile and demo audit routes require a server-side session; registration and
+login do not, and catalog routes remain public.
 
 ## Implemented defenses
 
 - Audit data is now session-only in the browser. Legacy persistent audit keys
   are deleted rather than migrated, avoiding disclosure of an old student's
   audit on a shared device.
-- The browser and server agree on a 5 MB upload maximum. The parser also requires
-  a `.pdf` name and `%PDF-` signature before invoking PDFBox.
+- The browser and server agree on a 5 MB per-file upload maximum. The overall
+  multipart request cap is 6 MB so form boundaries and headers do not reject an
+  otherwise valid near-limit file. The parser also requires a `.pdf` name and
+  `%PDF-` signature before invoking PDFBox.
 - The runtime upload endpoint no longer exposes the filename-triggered
   `ADMIN4082.txt` test path. Text fixtures remain available to parser unit tests
   without being remotely uploadable.
@@ -70,18 +75,23 @@ No test fixture includes a student name, EMPLID, or real audit content.
   pre-existing assertion mismatch: the route now supplies a sixth empty
   attribute-filter parameter, while the test expects five. No privacy-owned file
   changes that query or test.
-- Parser tests could not run in this workspace because Java 17 is unavailable.
-  Maven and dependencies downloaded successfully, then the wrapper stopped on
-  missing `JAVA_HOME`. CI must run `./mvnw test` before approval.
+- Java could not run in this workspace because Java 17 is unavailable. The two
+  new synthetic privacy test classes passed in GitHub Actions. They directly
+  instantiate the controller, so they do not cover Spring's multipart limit,
+  CORS processing, framework-generated missing-part/oversize responses, or
+  response headers on those framework errors. The legacy full parser suite is
+  not self-contained and remains a separate test-harness blocker.
 
 ## Review-required risks and decisions
 
-1. **Identity proofing is not beta-ready if accounts are exposed.** Local
-   registration accepts any eight-digit EMPLID plus a syntactically valid
-   `@login.cuny.edu` address without proving control of either. Microsoft sign-in
-   only links an already-created local account by matching email. Decide whether
-   to remove local registration, require verified Microsoft identity before
-   account creation, or keep the account API inaccessible in the public beta.
+1. **Identity proofing is not beta-ready, and the account routes are publicly
+   exposed today.** Local registration accepts any eight-digit EMPLID plus a
+   syntactically valid `@login.cuny.edu` address without proving control of
+   either. Microsoft sign-in links an already-created local account by matching
+   email. This permits account/identity squatting even though the planner UI does
+   not advertise login. Before beta, explicitly disable the account routes or
+   require verified Microsoft identity before account creation. That is an
+   authentication/product decision and is not made in this PR.
 2. **There is no documented student-record deletion or retention policy.** User
    profile and Microsoft-link records are indefinite; sessions last seven days.
    Choose retention periods and a deletion/support process before collecting
@@ -123,6 +133,9 @@ No test fixture includes a student name, EMPLID, or real audit content.
 - Verify password and Microsoft login issue a new `sid`, logout invalidates it,
   cross-site POSTs do not carry it, and only the exact configured production
   origin receives credentialed CORS headers.
-- Run the full parser suite with Java 17 and inspect the PR's GitHub Actions
-  verification result. Do not deploy this branch or merge it without owner
-  review because it changes authentication and student-data handling.
+- Add an integration test for a near-limit multipart upload and framework error
+  responses, plus focused backend tests for CORS, cookies, and session rotation.
+- Replace the parser suite's blank-path/manual fixtures and live database
+  assumptions before treating the full Java suite as a beta gate. Do not deploy
+  this branch or merge it without owner review because it changes authentication
+  and student-data handling.
