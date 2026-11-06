@@ -106,7 +106,11 @@ No test fixture includes a student name, EMPLID, or real audit content.
    `CORS_ALLOWED_ORIGINS=https://*.cloudfront.net`, overriding the safer
    application default. The proposed reviewed configuration uses only
    `https://d263b17wgkx1dd.cloudfront.net`. CORS is not authorization; the
-   endpoint remains public regardless.
+   endpoint remains public regardless. The automatic deployment workflow does
+   not apply `infrastructure/template.yaml`, so merging the configuration change
+   alone will not update the running Lambda environment. Apply the stack change
+   through a separately reviewed CloudFormation update, then verify the exact
+   origin and a non-allowed origin against the deployed parser.
 5. **The API Gateway execute endpoint is enabled.** It bypasses CloudFront's
    response-header policy, though it remains HTTPS and throttled. Decide whether
    operational access requires it; disabling it is an infrastructure change.
