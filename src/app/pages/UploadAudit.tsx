@@ -21,7 +21,7 @@ import {
 import { PlannerHeader } from "../components/PlannerHeader";
 import { useSetupProgress } from "../hooks/useSetupProgress";
 import { writeAuditData, type ParsedRequirements } from "../hooks/useAuditData";
-import { buildParserPayload } from "../../lib/schedulePayload";
+import { buildConfirmedAuditData } from "../../lib/auditReview";
 import { PARSER_BASE } from "../../lib/api";
 import styles from "./SmartBuilder.module.css";
 
@@ -123,14 +123,6 @@ export function UploadAudit() {
 		]);
 		if (genericNames.has(name)) return firstCourseLabel(req) ?? name;
 		return cleanDisplayName(name || req.tag || "Requirement");
-	};
-
-	const parseGpa = (value: unknown) => {
-		const parsed =
-			typeof value === "number"
-				? value
-				: Number.parseFloat(String(value ?? ""));
-		return Number.isFinite(parsed) ? parsed : null;
 	};
 
 	const hasTag = (req: ParserRequirement, ...needles: string[]) => {
@@ -724,14 +716,9 @@ export function UploadAudit() {
 								className="flex-1 h-10 text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
 								onClick={() => {
 									if (parserResponse && parsedRequirements) {
-										const dc = parserResponse["Degree Credits"];
-										writeAuditData({
-											creditsRequired: dc["Credits required"],
-											creditsApplied: dc["Credits applied"],
-											gpa: parseGpa(parserResponse["GPA"]),
-											parserPayload: buildParserPayload(parserResponse),
-											requirementsSummary: parsedRequirements,
-										});
+										writeAuditData(
+											buildConfirmedAuditData(parserResponse, parsedRequirements),
+										);
 										setFile(null);
 									}
 									markAuditUploaded();
