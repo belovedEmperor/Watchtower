@@ -25,7 +25,7 @@ import { buildParserPayload } from "../../lib/schedulePayload";
 import { PARSER_BASE } from "../../lib/api";
 import styles from "./SmartBuilder.module.css";
 
-const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_MB = 5;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 interface ParserCourse {
@@ -812,12 +812,12 @@ export function UploadAudit() {
 											creditsRequired: dc["Credits required"],
 											creditsApplied: dc["Credits applied"],
 											gpa: parseGpa(nextResponse["GPA"]),
-											fileName: file?.name ?? null,
 											parserPayload: buildParserPayload(nextResponse),
 											requirementsSummary: nextSummary,
 										});
 										setParserResponse(nextResponse);
 										setParsedRequirements(nextSummary);
+										setFile(null);
 									}
 									markAuditUploaded();
 									setShowReviewModal(false);

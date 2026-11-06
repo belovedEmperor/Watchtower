@@ -10,13 +10,18 @@ const catalogRouter = require("./routes/catalog");
 const app = express();
 const PORT = process.env.PORT || 3001;
 const isProduction = process.env.NODE_ENV === "production";
-const accountRoutesEnabled = process.env.ENABLE_ACCOUNT_ROUTES?.trim().toLowerCase() === "true";
+
+function isAccountRoutesEnabled(value) {
+  return value?.trim().toLowerCase() === "true";
+}
+
+const accountRoutesEnabled = isAccountRoutesEnabled(process.env.ENABLE_ACCOUNT_ROUTES);
 
 if (isProduction) {
   app.set("trust proxy", 1);
 }
 
-const allowedOrigins = (process.env.CORS_ORIGIN || "")
+const allowedOrigins = (process.env.CORS_ORIGIN || process.env.PUBLIC_APP_ORIGIN || "")
   .split(",")
   .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
@@ -25,8 +30,7 @@ function isAllowedOrigin(origin) {
   if (!origin) return true;
   if (!isProduction) return /^http:\/\/localhost:\d+$/.test(origin);
   const normalized = origin.replace(/\/$/, "");
-  const isCloudFront = /^https:\/\/[a-z0-9]+\.cloudfront\.net$/.test(normalized);
-  return allowedOrigins.includes(normalized) || isCloudFront;
+  return allowedOrigins.includes(normalized);
 }
 
 app.use(
@@ -61,7 +65,7 @@ if (accountRoutesEnabled) {
       cookie: {
         httpOnly: true,
         secure: isProduction,
-        sameSite: isProduction ? "none" : "lax",
+        sameSite: "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       },
     })
@@ -84,4 +88,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, accountRoutesEnabled };
+module.exports = { app, accountRoutesEnabled, isAccountRoutesEnabled };

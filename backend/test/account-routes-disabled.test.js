@@ -1,9 +1,9 @@
 const assert = require("node:assert/strict");
 const { after, before, test } = require("node:test");
 
-process.env.ENABLE_ACCOUNT_ROUTES = "false";
+delete process.env.ENABLE_ACCOUNT_ROUTES;
 
-const { app, accountRoutesEnabled } = require("../src/index");
+const { app, accountRoutesEnabled, isAccountRoutesEnabled } = require("../src/index");
 
 let baseUrl;
 let server;
@@ -38,6 +38,15 @@ test("keeps account routes disabled unless explicitly enabled", async () => {
 
   assert.equal(response.status, 404);
   assert.deepEqual(await response.json(), { error: "Not found" });
+});
+
+test("only enables account routes for an explicit true value", () => {
+  assert.equal(isAccountRoutesEnabled(undefined), false);
+  assert.equal(isAccountRoutesEnabled("false"), false);
+  assert.equal(isAccountRoutesEnabled("1"), false);
+  assert.equal(isAccountRoutesEnabled("yes"), false);
+  assert.equal(isAccountRoutesEnabled(" true "), true);
+  assert.equal(isAccountRoutesEnabled("TRUE"), true);
 });
 
 test("keeps existing account profiles inaccessible", async () => {
