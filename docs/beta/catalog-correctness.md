@@ -56,8 +56,10 @@ or deploying production, which was outside this task.
 ## Verification
 
 - `cargo fmt -- --check`: passed.
-- `cargo test api::handlers::course_section::tests --lib`: 4 passed against an
-  isolated PostgreSQL 18 database.
+- `cargo test api::handlers::course_section::tests --lib`: 4 test functions
+  passed against an isolated PostgreSQL 18 database. The cancellation test
+  covers both exact cancellation removal and preservation of a reassigned class
+  number's active owner.
 - `npm test` in `backend/`: 4 passed.
 - Public source sample: 5 courses / 160 Spring 2027 section records inspected.
 
