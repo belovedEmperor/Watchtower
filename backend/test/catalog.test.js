@@ -69,7 +69,7 @@ test("searches sections with parameterized term and query values", async () => {
     sections: [{ class_num: 12345, meetings: [] }],
     pagination: { limit: 50, offset: 0, has_more: false },
   });
-  assert.deepEqual(queries[0].values, ["FALL", 2026, "CSCI", 51, 0]);
+  assert.deepEqual(queries[0].values, ["FALL", 2026, "CSCI", 51, 0, ""]);
   assert.match(queries[0].text, /s\.term_season = \$1/);
   assert.match(queries[0].text, /s\.term_year = \$2/);
 });
