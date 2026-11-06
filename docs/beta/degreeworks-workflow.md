@@ -23,8 +23,8 @@ student identifier, production credential, or production database was accessed.
   remaining requirements, elective selection, and requested courses.
 - Unsupported majors are asserted to fail explicitly instead of silently being
   translated into a different program.
-- The existing academic workflow now runs the Java parser test suite in GitHub
-  Actions in addition to the scheduler validity suite.
+- The existing academic workflow now compiles the Java parser and its test
+  sources in GitHub Actions in addition to the scheduler validity suite.
 
 ## Review-required correctness issue
 
@@ -56,7 +56,11 @@ academically verified. The manual planner remains available regardless of major.
 - The broader scheduler suite could not run locally without `psycopg` and
   `python-sat`; the existing GitHub Actions job installs those dependencies.
 - Parser tests could not run locally because Java is not installed in this
-  workspace; the added GitHub Actions job installs Temurin 17 and runs them.
+  workspace. An initial CI run confirmed that the legacy suite is not
+  self-contained: it requires configured database credentials and specific
+  catalog rows, while two manual tests use intentionally blank local PDF/output
+  paths. The CI job therefore compiles the parser and test sources without
+  claiming those environment-dependent tests pass.
 - A true parser-to-live-solver smoke test requires deployed service access and a
   sanitized, representative audit fixture. It was not attempted here.
 
@@ -70,3 +74,6 @@ academically verified. The manual planner remains available regardless of major.
 4. Remove and replace generated sections in the manual planner, reload, and
    export the edited schedule.
 5. Decide and implement the review-modal correction policy described above.
+6. Replace the parser's blank-path/manual tests and live catalog assumptions
+   with synthetic fixtures and an isolated test database before treating the
+   Java parser suite as an automated beta gate.
