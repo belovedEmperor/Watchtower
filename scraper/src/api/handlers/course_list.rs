@@ -245,7 +245,13 @@ fn parse_published_attributes(page: &str) -> Option<Vec<String>> {
                     .replace("&quot;", "\"")
                     .replace("&#39;", "'")
             })
-            .filter(|item| !item.is_empty())
+            .filter(|item| {
+                !item.is_empty()
+                    && item
+                        .split_whitespace()
+                        .next()
+                        .map_or(true, |code| !code.eq_ignore_ascii_case("COPT"))
+            })
             .collect(),
     )
 }
@@ -260,7 +266,6 @@ mod published_attribute_tests {
         assert_eq!(
             parse_published_attributes(page),
             Some(vec![
-                "COPT - COPT (College Option)".to_string(),
                 "PLDI - GROUPC (Group C)".to_string(),
                 "WRIC - WRIC (Writing Intensive)".to_string(),
             ])
