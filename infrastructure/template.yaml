@@ -64,6 +64,7 @@ Resources:
       Environment:
         Variables:
           NODE_ENV: production
+          ENABLE_ACCOUNT_ROUTES: "false"
           POSTGRES_HOST: !Ref DatabaseHost
           POSTGRES_PORT: "5432"
           POSTGRES_USER: hunter_web
