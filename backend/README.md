@@ -1,6 +1,7 @@
 # Watchtower Backend
 
-Node.js/Express server for Watchtower authentication, session management, user profile lookup, and course search APIs. It runs on port **3001** by default.
+Node.js/Express server for public course search APIs and the currently disabled
+account/session implementation. It runs on port **3001** by default.
 
 The other two services in this project are independent:
 - **Spring Boot parser** (port 8080): parses DegreeWorks PDF audits
@@ -26,6 +27,10 @@ Create a `.env` file in `backend/` with the following values.
 # Server
 PORT=3001
 NODE_ENV=development
+
+# Keep false for the no-login beta. Account code remains available for a future
+# reviewed identity-proofing design.
+ENABLE_ACCOUNT_ROUTES=false
 
 # Session - use a long random string in production
 SESSION_SECRET=your-secret-here
@@ -57,7 +62,13 @@ Application tables should match the project schema in [`../database/schema.sql`]
 
 All API endpoints are prefixed with `/api`. Authenticated routes require an active session cookie named `sid`. Authentication rotates the session identifier, and user responses are marked `Cache-Control: no-store`.
 
-### Auth & Users - `/api/users`
+### Auth & Users - `/api/users` (disabled by default)
+
+The no-login beta returns `404` for every `/api/users/*` route and does not
+initialize PostgreSQL-backed browser sessions. The implementation remains in the
+repository, but it is mounted only when `ENABLE_ACCOUNT_ROUTES=true`. Do not
+enable it in a public environment until registration proves control of the CUNY
+identity being linked.
 
 #### `POST /api/users/register`
 
