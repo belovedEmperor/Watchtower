@@ -40,10 +40,14 @@ source code in [`src`](src).
 ### Install And Run
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 npm run dev
 ```
+
+Open <http://localhost:5176>. The development server updates the page as files
+change and proxies API, parser, and scheduler requests to the local service
+ports documented in `.env.example` and `vite.config.ts`.
 
 For local development, the frontend can use the Vite development proxies for
 the parser and scheduler when `VITE_PARSER_URL` and `VITE_SCHEDULER_URL` are
@@ -60,6 +64,41 @@ Create a production frontend build with:
 ```bash
 npm run build
 ```
+
+### Preview A Proposed UI Change
+
+Use a separate worktree to inspect a branch without changing your current
+checkout or merging it. Replace `BRANCH_NAME` with the proposed branch:
+
+```bash
+git fetch origin BRANCH_NAME
+git worktree add ../satisfi-preview origin/BRANCH_NAME
+cd ../satisfi-preview
+npm ci
+cp .env.example .env
+npm run dev
+```
+
+Open <http://localhost:5176>. When finished, stop the server with `Ctrl+C`,
+return to the original checkout, and remove only that preview worktree:
+
+```bash
+git worktree remove ../satisfi-preview
+```
+
+For a production-like check of the compiled frontend, run:
+
+```bash
+npm run build
+npm run preview -- --host 127.0.0.1
+```
+
+The command prints the local URL (`http://localhost:4173` by default, or the
+next available port) and does not merge, deploy, or modify production data.
+Unlike `npm run dev`, it does not provide the local service proxies. Set the
+`VITE_*` URLs before building if the preview must call specific API, parser, or
+scheduler services; otherwise UI states that depend on those services may show
+their unavailable or fallback behavior.
 
 Component-specific setup instructions are available in:
 - [Backend](backend/README.md)
