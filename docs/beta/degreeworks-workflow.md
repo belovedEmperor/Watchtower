@@ -26,20 +26,20 @@ student identifier, production credential, or production database was accessed.
 - The existing academic workflow now compiles the Java parser and its test
   sources in GitHub Actions in addition to the scheduler validity suite.
 
-## Review-required correctness issue
+## Beta safeguard awaiting review
 
-The audit-review modal currently lets a student toggle a parsed requirement
-between `Completed` and `Still Needed`. Confirming the modal moves the underlying
+The audit-review modal previously let a student toggle a parsed requirement
+between `Completed` and `Still Needed`. Confirming the modal moved the underlying
 requirement between the parser response lists before building the scheduler
-payload. Marking a requirement complete can therefore remove it from scheduling
-without evidence of a completed course or grade.
+payload. A student could therefore remove a requirement from scheduling without
+evidence of a completed course or grade.
 
-This is unsafe for a student-ready beta, but changing it is an academic and
-product decision. Recommended beta behavior is to make parsed completion status
-read-only and direct students to upload a corrected/current audit when the result
-is wrong. An alternative correction workflow would need a clearly labeled
-override, provenance, validation rules, and advising disclaimer. No behavior was
-changed in this PR pending owner review.
+The proposed beta safeguard makes these statuses read-only, preserves the parser
+response exactly when building the scheduler payload, and directs students to
+upload a current audit when the displayed result is wrong. A future correction
+workflow would need a clearly labeled override, provenance, validation rules,
+and an advising disclaimer. Because this changes an established academic
+workflow, it remains unmerged pending owner review.
 
 ## Supported-program limitation
 
@@ -73,7 +73,8 @@ academically verified. The manual planner remains available regardless of major.
    verify the result independently against the input.
 4. Remove and replace generated sections in the manual planner, reload, and
    export the edited schedule.
-5. Decide and implement the review-modal correction policy described above.
+5. Confirm the review modal has no clickable requirement rows and that its saved
+   scheduler payload preserves the parser's completed/still-needed partition.
 6. Replace the parser's blank-path/manual tests and live catalog assumptions
    with synthetic fixtures and an isolated test database before treating the
    Java parser suite as an automated beta gate.
