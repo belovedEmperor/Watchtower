@@ -90,3 +90,27 @@ or deploying production, which was outside this task.
 - Restore/deploy the public catalog route, then confirm `/api/catalog/terms`
   exposes Spring 2027. Production was not deployed or queried through private
   database access in this review.
+
+## Deployed follow-up
+
+Read-only checks after the approved catalog and deployment PRs landed confirmed
+that the public backend is now healthy and `/api/catalog/terms` exposes Spring
+2027 and Fall 2026. A deployed Spring 2027 CSCI query returned real class
+numbers, instructors, enrollment counts, meeting days/times, and locations.
+
+The follow-up also reproduced the reported attribute defect for `PHILO 23000`:
+the deployed API currently returns only `WRIC - WRIC (Writing Intensive)`.
+Coursedog's public record for course group `0316711` contains these top-level
+attributes:
+
+- `COPT - COPT (College Option)`
+- `PLDI - GROUPC (Group C)`
+- `WRIC - WRIC (Writing Intensive)`
+
+The published-attribute enrichment added in the catalog-correctness change has
+not yet been applied to production data because no production catalog sync ran
+after that merge. The follow-up filter intentionally drops only `COPT`; it keeps
+PLDI and WRIC. After review and merge, run one controlled Spring 2027 sync and
+verify those two retained values through `/api/catalog/sections` and
+`/api/catalog/attributes`. This follow-up did not run a scrape or modify
+production data.
