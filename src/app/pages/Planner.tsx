@@ -23,12 +23,12 @@ import {
   type Weekday,
 } from "../../lib/catalog";
 import { downloadScheduleCalendar } from "../../lib/calendarExport";
+import { appendUniqueCatalogSections, createCatalogPaginationGuard } from "../../lib/catalogPagination";
 import {
   addSectionToSchedule,
   alreadyHasCourse,
   conflictsWith,
   filterPlannerSections,
-  isSectionOpen,
   removeSectionFromSchedule,
 } from "../../lib/plannerJourney";
 import {
@@ -152,6 +152,8 @@ export function Planner() {
   const navigate = useNavigate();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const clearSucceededRef = useRef(false);
+  const loadMoreControllerRef = useRef<AbortController | null>(null);
+  const [catalogPaginationGuard] = useState(() => createCatalogPaginationGuard());
   const [terms, setTerms] = useState(DEFAULT_TERMS);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CatalogSection[]>([]);
@@ -160,7 +162,7 @@ export function Planner() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
-  const [openOnly, setOpenOnly] = useState(false);
+  const [hideFull, setHideFull] = useState(false);
   const [mode, setMode] = useState<"all" | CatalogSection["instruction_mode"]>("all");
   const [days, setDays] = useState<Weekday[]>([]);
   const [attributeQuery, setAttributeQuery] = useState("");
@@ -222,16 +224,22 @@ export function Planner() {
 
   useEffect(() => {
     const controller = new AbortController();
+    const generation = catalogPaginationGuard.beginDataset();
+    loadMoreControllerRef.current?.abort();
+    loadMoreControllerRef.current = null;
+    setLoadingMore(false);
+    setLoading(true);
     const timer = window.setTimeout(() => {
-      setLoading(true);
-      searchCatalogSections(term, query, 0, controller.signal, attributeQuery)
+      searchCatalogSections(term, query, 0, controller.signal, attributeQuery, hideFull)
         .then((page) => {
+          if (!catalogPaginationGuard.accepts(generation)) return;
           setResults(page.sections);
           setHasMore(page.pagination.has_more);
           setPreviewMode(false);
         })
         .catch((error: unknown) => {
           if (error instanceof DOMException && error.name === "AbortError") return;
+          if (!catalogPaginationGuard.accepts(generation)) return;
           const fallback = PREVIEW_SECTIONS.map((section) => ({ ...section, term_season: term.term_season, term_year: term.term_year })).filter((section) => {
             const text = `${section.course_code} ${section.course_name}`.toLowerCase();
             return text.includes(query.trim().toLowerCase());
@@ -241,14 +249,16 @@ export function Planner() {
           setPreviewMode(true);
         })
         .finally(() => {
-          if (!controller.signal.aborted) setLoading(false);
+          if (!controller.signal.aborted && catalogPaginationGuard.accepts(generation)) setLoading(false);
         });
     }, 250);
     return () => {
       controller.abort();
+      loadMoreControllerRef.current?.abort();
+      loadMoreControllerRef.current = null;
       window.clearTimeout(timer);
     };
-  }, [attributeQuery, query, term]);
+  }, [attributeQuery, catalogPaginationGuard, hideFull, query, term]);
 
   function updateActiveSchedule(update: (schedule: PlannerSchedule) => PlannerSchedule) {
     setSaved((current) => ({
@@ -277,13 +287,23 @@ export function Planner() {
   }
 
   async function loadMore() {
+    const generation = catalogPaginationGuard.currentDataset();
+    const controller = new AbortController();
+    loadMoreControllerRef.current?.abort();
+    loadMoreControllerRef.current = controller;
     setLoadingMore(true);
     try {
-      const page = await searchCatalogSections(term, query, results.length, undefined, attributeQuery);
-      setResults((current) => [...current, ...page.sections.filter((section) => !current.some((item) => item.class_num === section.class_num))]);
+      const page = await searchCatalogSections(term, query, results.length, controller.signal, attributeQuery, hideFull);
+      if (controller.signal.aborted || !catalogPaginationGuard.accepts(generation)) return;
+      setResults((current) => appendUniqueCatalogSections(current, page.sections));
       setHasMore(page.pagination.has_more);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) throw error;
     } finally {
-      setLoadingMore(false);
+      if (loadMoreControllerRef.current === controller) {
+        loadMoreControllerRef.current = null;
+        setLoadingMore(false);
+      }
     }
   }
 
@@ -329,7 +349,7 @@ export function Planner() {
           setSaved(readPlannerSchedules());
           setQuery("");
           setResults([]);
-          setOpenOnly(false);
+          setHideFull(false);
           setMode("all");
           setDays([]);
           setAttributeQuery("");
@@ -351,11 +371,11 @@ export function Planner() {
   }
 
   const filteredResults = useMemo(() => filterPlannerSections(results, selected, {
-    openOnly,
+    hideFull,
     mode,
     days,
     showConflicts,
-  }), [days, mode, openOnly, results, selected, showConflicts]);
+  }), [days, hideFull, mode, results, selected, showConflicts]);
 
   return (
     <main className={`${styles.planner} ${darkMode ? styles.dark : ""} ${mobilePane === "schedule" ? styles.scheduleFocused : ""}`}>
@@ -397,7 +417,7 @@ export function Planner() {
 
         {filtersOpen && (
           <div id="catalog-filters" className={styles.filterPanel} role="group" aria-label="Catalog filters">
-            <button type="button" aria-pressed={openOnly} onClick={() => setOpenOnly((value) => !value)} className={`${styles.filterChip} ${openOnly ? styles.filterChipActive : ""}`}>Open seats</button>
+            <button type="button" aria-pressed={hideFull} onClick={() => setHideFull((value) => !value)} className={`${styles.filterChip} ${hideFull ? styles.filterChipActive : ""}`}>Hide full sections</button>
             <select aria-label="Instruction mode" value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} className={styles.control}>
               <option value="all">All formats</option>
               <option value="in_person">In person</option>
@@ -447,7 +467,6 @@ export function Planner() {
             const hasAnotherSection = !isSelected && alreadyHasCourse(section, selected);
             const expanded = expandedClass === section.class_num;
             const sectionColor = SECTION_COLORS[resultIndex % SECTION_COLORS.length];
-            const sectionOpen = isSectionOpen(section);
             return (
               <article
                 key={section.class_num}
@@ -460,7 +479,11 @@ export function Planner() {
                   </button>
                   <strong className={styles.courseCode}>{section.course_code}-{section.section_number}</strong>
                   <button type="button" className={styles.courseTitle} onClick={() => setExpandedClass(expanded ? null : section.class_num)} aria-expanded={expanded} aria-controls={`section-${section.class_num}-details`}>{section.course_name}</button>
-                  <span className={`${styles.statusBadge} ${sectionOpen ? "" : styles.statusClosed}`}>{sectionOpen ? "Open" : section.enrollment_status ?? "Closed"}</span>
+                  {section.enrollment_status && (
+                    <span className={`${styles.statusBadge} ${section.enrollment_status === "open" ? "" : styles.statusClosed}`}>
+                      {section.enrollment_status}
+                    </span>
+                  )}
                   <span className={styles.seatCount}>{section.enrollment ?? "?"}/{section.max_enrollment ?? "?"} seats filled</span>
                   <button
                     type="button"
