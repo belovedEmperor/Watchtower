@@ -40,10 +40,17 @@ source code in [`src`](src).
 ### Install And Run
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 npm run dev
 ```
+
+Open the `Local` URL printed by Vite (normally <http://localhost:5176>). If
+that port is already occupied, Vite prints a different port; using the printed
+URL ensures that you inspect the server started from this checkout. The
+development server updates the page as files change and proxies API, parser,
+and scheduler requests to the local service ports documented in `.env.example`
+and `vite.config.ts`.
 
 For local development, the frontend can use the Vite development proxies for
 the parser and scheduler when `VITE_PARSER_URL` and `VITE_SCHEDULER_URL` are
@@ -59,6 +66,53 @@ Create a production frontend build with:
 
 ```bash
 npm run build
+```
+
+### Preview A Proposed UI Change
+
+Use a separate worktree to inspect a branch without changing your current
+checkout or merging it. Replace `BRANCH_NAME` with the proposed branch:
+
+```bash
+git fetch origin BRANCH_NAME
+git worktree add ../satisfi-preview origin/BRANCH_NAME
+cd ../satisfi-preview
+npm ci
+cp .env.example .env
+npm run dev
+```
+
+Open the `Local` URL printed by Vite and inspect the proposed change. When
+finished with the development server, stop it with `Ctrl+C`. While still in
+the proposed branch's `../satisfi-preview` worktree, run a production-like
+check of the compiled frontend:
+
+```bash
+npm run build
+npm run preview -- --host 127.0.0.1 --strictPort
+```
+
+Open the URL printed by the preview command (normally
+<http://127.0.0.1:4173>). `--strictPort` makes the command stop if port 4173 is
+already occupied instead of silently selecting another server address. Stop
+the other server or rerun with an explicit unused port:
+
+```bash
+npm run preview -- --host 127.0.0.1 --port 4174 --strictPort
+```
+
+Open the URL that Vite prints. The command does not merge, deploy, or modify
+production data. Unlike `npm run dev`, it does not provide the local service
+proxies. If service-backed UI behavior must be tested, configure the `VITE_*`
+URLs for local or other non-production test services *before* running `npm run
+build`; otherwise those UI states may show their unavailable or fallback
+behavior.
+
+After both checks, stop the preview server with `Ctrl+C`, return to the
+original checkout, and remove only the preview worktree:
+
+```bash
+git worktree remove ../satisfi-preview
 ```
 
 Component-specific setup instructions are available in:
@@ -115,7 +169,7 @@ To view it, copy and paste it into https://playground.structurizr.com/.
 - Rust scraper: `scraper/Cargo.toml` forbids unsafe code and enables Clippy lint groups including `pedantic`, `nursery`, `enum_glob_use`, and `unwrap_used`.
 - Java parser: The parser is a Maven Spring Boot project using Java 17 and package namespace `edu.hunter.watchtower`.
 - SQL database: Database structure is maintained directly in `database/schema.sql`.
-- Formatting/linting: The root frontend package currently defines `dev` and `build` scripts only; no project-wide formatter or linter command is configured.
+- Formatting/linting: The root frontend package defines `dev`, `build`, `preview`, `test`, and `typecheck` scripts; no project-wide formatter or linter command is configured.
 
 ## Project Status
 
