@@ -302,10 +302,15 @@ test("scheduler failure is readable and does not import a schedule", async ({ pa
 
 test("leaving generation cancels the stale request without importing", async ({ page }) => {
   let releaseScheduler: (() => void) | undefined;
+  let markRequestReceived: (() => void) | undefined;
   const responseGate = new Promise<void>((resolve) => {
     releaseScheduler = resolve;
   });
+  const requestReceived = new Promise<void>((resolve) => {
+    markRequestReceived = resolve;
+  });
   await page.route("**/api/schedule/generate", async (route) => {
+    markRequestReceived?.();
     await responseGate;
     try {
       await route.fulfill({ status: 200, json: generatedSchedule });
@@ -316,6 +321,7 @@ test("leaving generation cancels the stale request without importing", async ({ 
 
   await completeSmartBuilder(page, "Computer Science");
   await expect(page).toHaveURL(/\/schedules$/);
+  await requestReceived;
   await page.getByRole("button", { name: "Back to Preferences" }).first().click();
   await expect(page).toHaveURL(/\/preferences$/);
 
