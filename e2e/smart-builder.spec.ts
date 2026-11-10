@@ -76,6 +76,16 @@ const generatedSchedule = {
 };
 
 async function mockCatalog(page: Page) {
+	await page.route("**/api/courses/departments", (route) =>
+		route.fulfill({
+			json: {
+				departments: [
+					{ code: "CSCI", name: "Computer Science" },
+					{ code: "MATH", name: "Mathematics" },
+				],
+			},
+		}),
+	);
   await page.route("**/api/catalog/terms", (route) =>
     route.fulfill({ json: { terms: [{ term_season: "SPRING", term_year: 2027 }] } }),
   );
@@ -137,7 +147,7 @@ test("manual planner uses readable removable filter chips", async ({ page }) => 
   await expect(page.getByRole("button", { name: "Filters" })).toBeVisible();
 });
 
-async function completeSmartBuilder(page: Page, major: string) {
+async function completeSmartBuilder(page: Page, major: string, customizePreferences = false) {
   await page.route("**/AuditParse", (route) =>
     route.fulfill({ status: 200, json: parserResponse(major) }),
   );
@@ -153,6 +163,10 @@ async function completeSmartBuilder(page: Page, major: string) {
   await expect(page.getByRole("dialog")).toContainText("Synthetic major requirement");
   await page.getByRole("button", { name: "Continue to Preferences" }).click();
   await expect(page).toHaveURL(/\/preferences$/);
+  if (customizePreferences) {
+	await page.getByLabel("Maximum credits").fill("17.5");
+	await page.getByLabel("Computer Science").click();
+  }
   await page.getByRole("button", { name: "Generate Schedules" }).click();
 }
 
@@ -164,7 +178,8 @@ for (const major of MAJORS) {
       await route.fulfill({ status: 200, json: generatedSchedule });
     });
 
-    await completeSmartBuilder(page, major.parserName);
+		const customizePreferences = major.schedulerCode === "CS";
+		await completeSmartBuilder(page, major.parserName, customizePreferences);
 
     await expect(page).toHaveURL(/\/planner\?imported=1$/);
     await expect(page.getByText("1 smart schedule added.")).toBeVisible();
@@ -181,8 +196,8 @@ for (const major of MAJORS) {
         }],
       },
       ui_payload: {
-        credit_lower_bound: 3,
-        credit_upper_bound: 18,
+				credit_lower_bound: 12,
+				credit_upper_bound: customizePreferences ? 17.5 : 16,
         unavailable: [],
         morning: false,
         afternoon: false,
@@ -194,7 +209,7 @@ for (const major of MAJORS) {
         major_electives_needed: [],
         general_electives_needed: [],
         specific_courses: [],
-        departmental: [],
+				departmental: customizePreferences ? ["Computer Science"] : [],
       },
       term_season: "SPRING",
       term_year: 2027,
